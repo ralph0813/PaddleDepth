@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 import paddle
-# import paddle.fluid as fluid
+import paddle.fluid as fluid
 import paddle.nn.functional as F
 
 from Template import ModelHandlerTemplate
@@ -22,7 +22,7 @@ class GwcNetInterface(ModelHandlerTemplate):
 
     def get_model(self) -> list:
         args = self.__args
-        model = GwcNet(args.dispNum, args.use_concat_volume)
+        model = GwcNet(args.dispNum)
         # params_info = paddle.summary(model, [(1, 3, 256, 512), (1, 3, 256, 512)])
         # print(params_info)
         return [model]
@@ -77,7 +77,11 @@ class GwcNetInterface(ModelHandlerTemplate):
         if self.MODEL_ID == model_id:
             mask = (label_data[0] > args.startDisp) & (label_data[0] < args.startDisp + args.dispNum)
             for disp_est, weight in zip(output_data, weights):
-                all_losses.append(weight * F.smooth_l1_loss(disp_est[mask], label_data[mask], reduction='mean'))
+                total_num = mask.sum() + 1e-10
+                loss = fluid.layers.smooth_l1(disp_est * mask, label_data[0] * mask)
+                loss = loss / total_num
+
+                all_losses.append(loss)
         return sum(all_losses)
 
     def pretreatment(self, epoch: int, rank: object) -> None:
